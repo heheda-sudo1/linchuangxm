@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="wechat-webview-api-version" content="1.0">
+    <title>临床项目管理系统</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Font Awesome图标 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* 基础样式 */
+        .card-shadow { box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); }
+        .primary { color: #1677ff; }
+        .bg-primary { background-color: #1677ff; }
+        .bg-primary-light { background-color: rgba(22, 119, 255, 0.1); }
+        .success { color: #52c41a; }
+        .bg-success { background-color: #52c41a; }
+        .danger { color: #ff4d4f; }
+        .secondary { color: #666666; }
+        /* 模态框动画 */
+        .modal-enter { animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* 内容展开收起样式 */
+        .content-collapse {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .content-expand-btn {
+            color: #1677ff;
+            font-size: 0.875rem;
+            margin-left: 4px;
+        }
+        .content-expand-btn:hover {
+            text-decoration: underline;
+        }
+        /* 批量选择样式 */
+        .batch-actions {
+            display: none;
+        }
+        .batch-actions.show {
+            display: flex;
+        }
+        .checkbox-item {
+            width: 16px;
+            height: 16px;
+            accent-color: #1677ff;
+            cursor: pointer;
+        }
+        /* 微信适配 */
+        body {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        button {
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        input, select, textarea {
+            -webkit-appearance: none;
+            appearance: none;
+            border-radius: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl font-bold primary">临床项目管理</h1>
+            <div id="auth-section" class="flex items-center gap-2">
+                <span id="user-role" class="text-sm secondary">访客</span>
+                <button id="login-btn" class="px-3 py-1 bg-primary text-white rounded text-sm">管理员登录</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 筛选区域 -->
+    <section class="bg-white py-4 mb-4">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- 城市筛选 -->
+                <div class="relative">
+                    <label class="block text-sm font-medium secondary mb-1">城市</label>
+                    <select id="city-filter" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
+                        <option value="all">全部城市</option>
+                        <option value="北京">北京</option>
+                        <option value="上海">上海</option>
+                        <option value="广州">广州</option>
+                        <option value="深圳">深圳</option>
+                    </select>
+                </div>
+
+                <!-- 系统筛选 -->
+                <div class="relative">
+                    <label class="block text-sm font-medium secondary mb-1">系统</label>
+                    <select id="system-filter" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
+                        <option value="all">全部系统</option>
+                        <option value="中兴系统">中兴系统</option>
+                        <option value="太美系统">太美系统</option>
+                        <option value="双系统">双系统</option>
+                        <option value="不联网">不联网</option>
+                        <option value="易试药系统">易试药系统</option>
+                        <option value="思诺系统">思诺系统</option>
+                    </select>
+                </div>
+
+                <!-- 体检时间筛选 -->
+                <div class="relative">
+                    <label class="block text-sm font-medium secondary mb-1">体检时间</label>
+                    <input type="date" id="date-filter" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
+                </div>
+            </div>
+            <div class="mt-4 flex justify-center">
+                <button id="reset-filter" class="px-4 py-2 border border-gray-300 rounded text-secondary hover:bg-gray-50 transition">
+                    <i class="fas fa-refresh mr-1"></i> 重置筛选
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 操作按钮区域 -->
+    <section class="container mx-auto px-4 mb-4 flex flex-wrap gap-3 justify-between">
+        <!-- 批量操作按钮（仅管理员可见） -->
+        <div id="batch-actions" class="batch-actions items-center gap-3">
+            <button id="select-all" class="px-3 py-1 border border-gray-300 rounded text-secondary hover:bg-gray-50 transition text-sm flex items-center">
+                <i class="fas fa-check-square mr-1"></i> 全选
+            </button>
+            <button id="batch-delete" class="px-3 py-1 bg-danger text-white rounded hover:bg-red-600 transition text-sm flex items-center">
+                <i class="fas fa-trash mr-1"></i> 批量删除
+                <span id="selected-count" class="ml-1 bg-white text-danger text-xs px-1 rounded">0</span>
+            </button>
+        </div>
+        
+        <!-- 添加项目按钮（仅管理员可见） -->
+        <button id="add-project-btn" class="hidden px-4 py-2 bg-success text-white rounded hover:bg-green-600 transition flex items-center">
+            <i class="fas fa-plus mr-2"></i> 添加新临床项目
+        </button>
+    </section>
+
+    <!-- 项目列表区域 -->
+    <main class="container mx-auto px-4 pb-10">
+        <div id="project-list" class="space-y-6">
+            <div class="text-center secondary py-10">
+                <i class="fas fa-folder-open text-2xl mb-2"></i>
+                <p>请登录管理员账号管理项目</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- 登录模态框 -->
+    <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden modal-enter">
+        <div class="bg-white rounded-lg w-full max-w-sm mx-4">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h2 class="text-lg font-medium">管理员登录</h2>
+                <button id="close-login" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="login-form" class="p-4">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium secondary mb-1" for="username">用户名 <span class="danger">*</span></label>
+                    <input type="text" id="username" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" required>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium secondary mb-1" for="password">密码 <span class="danger">*</span></label>
+                    <input type="password" id="password" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" required>
+                </div>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" id="cancel-login" class="px-4 py-2 border border-gray-300 rounded text-secondary hover:bg-gray-50 transition">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-700 transition">登录</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 添加/编辑项目模态框 -->
+    <div id="project-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden modal-enter">
+        <div class="bg-white rounded-lg w-full max-w-md mx-4">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h2 id="modal-title" class="text-lg font-medium">添加临床项目</h2>
+                <button id="close-modal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="project-form" class="p-4">
+                <input type="hidden" id="project-id">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium secondary mb-1" for="project-city">城市 <span class="danger">*</span></label>
+                    <input type="text" id="project-city" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" required placeholder="如：北京">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium secondary mb-1" for="project-content">项目内容 <span class="danger">*</span></label>
+                    <textarea id="project-content" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" required placeholder="请输入项目详情"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium secondary mb-1" for="project-amount">补助金额（元） <span class="danger">*</span></label>
+                    <input type="number" id="project-amount" min="0" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" required placeholder="如：5000">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium secondary mb-1" for="project-system">系统 <span class="danger">*</span></label>
+                    <select id="project-system" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" required>
+                        <option value="">请选择系统</option>
+                        <option value="中兴系统">中兴系统</option>
+                        <option value="太美系统">太美系统</option>
+                        <option value="双系统">双系统</option>
+                        <option value="不联网">不联网</option>
+                        <option value="易试药系统">易试药系统</option>
+                        <option value="思诺系统">思诺系统</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium secondary mb-1" for="project-days">住院天数 <span class="danger">*</span></label>
+                    <input type="number" id="project-days" min="0" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" required placeholder="如：7">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium secondary mb-1" for="project-date">体检时间 <span class="danger">*</span></label>
+                    <input type="date" id="project-date" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" required>
+                </div>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" id="cancel-project" class="px-4 py-2 border border-gray-300 rounded text-secondary hover:bg-gray-50 transition">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-700 transition">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let isAdmin = false;
+        let projects = []; // 存储项目数据
+        const ADMIN_CRED = { username: 'admin', password: '123456' };
+        // 内容截断长度配置（可根据需要调整）
+        const CONTENT_TRUNCATE_LENGTH = 20;
+        // 存储选中的项目ID
+        let selectedProjectIds = new Set();
+
+        // DOM加载完成后初始化
+        window.onload = function() {
+            // 初始化示例数据
+            initSampleData();
+            // 渲染项目列表
+            renderProjects();
+            // 绑定所有事件
+            bindAllEvents();
+            // 调试日志
+            console.log('页面初始化完成，添加按钮元素：', document.getElementById('add-project-btn'));
+        };
+
+        // 初始化示例项目数据（增加长内容示例）
+        function initSampleData() {
+            // 从本地存储读取数据，没有则初始化示例数据
+            const stored = localStorage.getItem('clinical_projects');
+            if (stored) {
+                projects = JSON.parse(stored);
+            } else {
+                projects = [
+                    {
+                        id: 1,
+                        city: '北京',
+                        content: '心血管疾病临床研究，针对高血压、冠心病、心力衰竭等常见心血管疾病开展多中心、随机、双盲对照临床试验，评估新型药物的疗效和安全性，纳入标准为18-75岁确诊患者，排除严重肝肾功能不全者。',
+                        amount: 5000,
+                        system: '中兴系统',
+                        days: 7,
+                        date: '2026-03-15'
+                    },
+                    {
+                        id: 2,
+                        city: '上海',
+                        content: '糖尿病新药临床试验，聚焦2型糖尿病患者，研究新型SGLT-2抑制剂的降糖效果和心血管获益，试验周期为24周，包含筛查期、治疗期和随访期三个阶段，补助包含交通补贴和营养补贴。',
+                        amount: 8000,
+                        system: '太美系统',
+                        days: 14,
+                        date: '2026-04-20'
+                    },
+                    {
+                        id: 3,
+                        city: '广州',
+                        content: '肿瘤免疫治疗临床试验，针对晚期实体瘤患者，评估PD-1抑制剂联合化疗的治疗效果，试验入组人数120人，分为试验组和对照组，随访周期1年。',
+                        amount: 12000,
+                        system: '双系统',
+                        days: 21,
+                        date: '2026-05-10'
+                    }
+                ];
+                // 保存到本地存储
+                localStorage.setItem('clinical_projects', JSON.stringify(projects));
+            }
+        }
+
+        // 绑定所有事件处理函数
+        function bindAllEvents() {
+            // 1. 登录按钮事件
+            document.getElementById('login-btn').onclick = function() {
+                if (isAdmin) {
+                    // 退出登录
+                    isAdmin = false;
+                    document.getElementById('user-role').textContent = '访客';
+                    this.textContent = '管理员登录';
+                    document.getElementById('add-project-btn').classList.add('hidden');
+                    document.getElementById('batch-actions').classList.remove('show');
+                    selectedProjectIds.clear();
+                    updateSelectedCount();
+                    renderProjects(); // 重新渲染（隐藏编辑/删除按钮）
+                } else {
+                    // 打开登录模态框
+                    document.getElementById('login-modal').classList.remove('hidden');
+                }
+            };
+
+            // 2. 关闭登录模态框
+            document.getElementById('close-login').onclick = closeLoginModal;
+            document.getElementById('cancel-login').onclick = closeLoginModal;
+
+            // 3. 登录表单提交
+            document.getElementById('login-form').onsubmit = function(e) {
+                e.preventDefault();
+                const user = document.getElementById('username').value;
+                const pwd = document.getElementById('password').value;
+
+                if (user === ADMIN_CRED.username && pwd === ADMIN_CRED.password) {
+                    isAdmin = true;
+                    closeLoginModal();
+                    document.getElementById('user-role').textContent = '管理员';
+                    document.getElementById('login-btn').textContent = '退出登录';
+                    document.getElementById('add-project-btn').classList.remove('hidden');
+                    document.getElementById('batch-actions').classList.add('show');
+                    renderProjects(); // 重新渲染（显示编辑/删除按钮）
+                } else {
+                    alert('用户名或密码错误！正确账号：admin，密码：123456');
+                }
+            };
+
+            // 4. 添加项目按钮事件
+            document.getElementById('add-project-btn').onclick = function() {
+                // 清空表单，设置标题为添加
+                document.getElementById('modal-title').textContent = '添加临床项目';
+                document.getElementById('project-form').reset();
+                document.getElementById('project-id').value = '';
+                // 打开添加项目模态框
+                document.getElementById('project-modal').classList.remove('hidden');
+                console.log('添加项目模态框已打开');
+            };
+
+            // 5. 关闭项目模态框
+            document.getElementById('close-modal').onclick = closeProjectModal;
+            document.getElementById('cancel-project').onclick = closeProjectModal;
+
+            // 6. 保存项目表单提交
+            document.getElementById('project-form').onsubmit = function(e) {
+                e.preventDefault();
+                // 获取表单数据
+                const id = document.getElementById('project-id').value;
+                const newProject = {
+                    city: document.getElementById('project-city').value,
+                    content: document.getElementById('project-content').value,
+                    amount: parseInt(document.getElementById('project-amount').value),
+                    system: document.getElementById('project-system').value,
+                    days: parseInt(document.getElementById('project-days').value),
+                    date: document.getElementById('project-date').value
+                };
+
+                if (id) {
+                    // 编辑现有项目
+                    const index = projects.findIndex(p => p.id == id);
+                    if (index !== -1) {
+                        projects[index] = { ...projects[index], ...newProject };
+                        alert('项目编辑成功！');
+                    }
+                } else {
+                    // 添加新项目（用时间戳作为唯一ID）
+                    newProject.id = Date.now();
+                    projects.push(newProject);
+                    alert('项目添加成功！');
+                }
+
+                // 保存到本地存储
+                localStorage.setItem('clinical_projects', JSON.stringify(projects));
+                // 关闭模态框
+                closeProjectModal();
+                // 重新渲染列表
+                renderProjects();
+            };
+
+            // 7. 筛选和重置事件
+            document.getElementById('city-filter').onchange = renderProjects;
+            document.getElementById('system-filter').onchange = renderProjects;
+            document.getElementById('date-filter').onchange = renderProjects;
+            document.getElementById('reset-filter').onclick = function() {
+                document.getElementById('city-filter').value = 'all';
+                document.getElementById('system-filter').value = 'all';
+                document.getElementById('date-filter').value = '';
+                renderProjects();
+            };
+
+            // 8. 全选/取消全选事件
+            document.getElementById('select-all').onclick = function() {
+                // 获取当前筛选后的项目ID列表
+                const filteredIds = getFilteredProjectIds();
+                
+                if (selectedProjectIds.size === filteredIds.length && filteredIds.length > 0) {
+                    // 取消全选
+                    selectedProjectIds.clear();
+                    this.innerHTML = '<i class="fas fa-check-square mr-1"></i> 全选';
+                } else {
+                    // 全选
+                    filteredIds.forEach(id => selectedProjectIds.add(id));
+                    this.innerHTML = '<i class="fas fa-square mr-1"></i> 取消全选';
+                }
+                updateSelectedCount();
+                renderProjects();
+            };
+
+            // 9. 批量删除事件
+            document.getElementById('batch-delete').onclick = function() {
+                if (selectedProjectIds.size === 0) {
+                    alert('请先选择要删除的项目！');
+                    return;
+                }
+
+                if (confirm(`确定要删除选中的 ${selectedProjectIds.size} 个项目吗？删除后无法恢复！`)) {
+                    // 过滤掉选中的项目
+                    projects = projects.filter(p => !selectedProjectIds.has(p.id));
+                    // 保存到本地存储
+                    localStorage.setItem('clinical_projects', JSON.stringify(projects));
+                    // 清空选中状态
+                    selectedProjectIds.clear();
+                    updateSelectedCount();
+                    // 更新全选按钮文本
+                    document.getElementById('select-all').innerHTML = '<i class="fas fa-check-square mr-1"></i> 全选';
+                    // 重新渲染列表
+                    renderProjects();
+                    alert(`成功删除 ${selectedProjectIds.size > 0 ? selectedProjectIds.size : 0} 个项目！`);
+                }
+            };
+
+            // 10. 项目列表的点击事件（事件委托）
+            document.getElementById('project-list').onclick = function(e) {
+                // 内容展开/收起
+                if (e.target.closest('.content-expand-btn')) {
+                    const contentWrapper = e.target.closest('.content-wrapper');
+                    const fullContent = contentWrapper.dataset.full;
+                    const truncContent = contentWrapper.dataset.trunc;
+                    const contentText = contentWrapper.querySelector('.content-text');
+                    const expandBtn = contentWrapper.querySelector('.content-expand-btn');
+                    
+                    if (contentText.textContent === truncContent + '...') {
+                        // 展开
+                        contentText.textContent = fullContent;
+                        expandBtn.textContent = ' 收起';
+                        expandBtn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i>收起';
+                    } else {
+                        // 收起
+                        contentText.textContent = truncContent + '...';
+                        expandBtn.textContent = ' 展开';
+                        expandBtn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i>展开';
+                    }
+                    return;
+                }
+
+                // 项目复选框点击
+                if (e.target.closest('.project-checkbox')) {
+                    const checkbox = e.target.closest('.project-checkbox');
+                    const projectId = parseInt(checkbox.dataset.id);
+                    
+                    if (checkbox.checked) {
+                        selectedProjectIds.add(projectId);
+                    } else {
+                        selectedProjectIds.delete(projectId);
+                    }
+                    
+                    updateSelectedCount();
+                    // 更新全选按钮状态
+                    updateSelectAllButtonState();
+                    return;
+                }
+
+                // 编辑项目
+                if (e.target.closest('.edit-project')) {
+                    const id = parseInt(e.target.closest('.edit-project').dataset.id);
+                    const project = projects.find(p => p.id === id);
+                    if (project) {
+                        // 填充表单数据
+                        document.getElementById('modal-title').textContent = '编辑临床项目';
+                        document.getElementById('project-id').value = project.id;
+                        document.getElementById('project-city').value = project.city;
+                        document.getElementById('project-content').value = project.content;
+                        document.getElementById('project-amount').value = project.amount;
+                        document.getElementById('project-system').value = project.system;
+                        document.getElementById('project-days').value = project.days;
+                        document.getElementById('project-date').value = project.date;
+                        // 打开模态框
+                        document.getElementById('project-modal').classList.remove('hidden');
+                    }
+                    return;
+                }
+
+                // 删除项目（单个）
+                if (e.target.closest('.delete-project')) {
+                    const id = parseInt(e.target.closest('.delete-project').dataset.id);
+                    if (confirm('确定要删除该项目吗？删除后无法恢复！')) {
+                        projects = projects.filter(p => p.id !== id);
+                        localStorage.setItem('clinical_projects', JSON.stringify(projects));
+                        // 如果该项目被选中，从选中集合中移除
+                        selectedProjectIds.delete(id);
+                        updateSelectedCount();
+                        updateSelectAllButtonState();
+                        renderProjects();
+                        alert('项目删除成功！');
+                    }
+                    return;
+                }
+            };
+        }
+
+        // 获取筛选后的项目ID列表
+        function getFilteredProjectIds() {
+            const city = document.getElementById('city-filter').value;
+            const system = document.getElementById('system-filter').value;
+            const date = document.getElementById('date-filter').value;
+
+            let filtered = [...projects];
+            if (city !== 'all') filtered = filtered.filter(p => p.city === city);
+            if (system !== 'all') filtered = filtered.filter(p => p.system === system);
+            if (date) filtered = filtered.filter(p => p.date === date);
+
+            return filtered.map(p => p.id);
+        }
+
+        // 更新选中数量显示
+        function updateSelectedCount() {
+            document.getElementById('selected-count').textContent = selectedProjectIds.size;
+        }
+
+        // 更新全选按钮状态
+        function updateSelectAllButtonState() {
+            const selectAllBtn = document.getElementById('select-all');
+            const filteredIds = getFilteredProjectIds();
+            
+            if (selectedProjectIds.size === filteredIds.length && filteredIds.length > 0) {
+                selectAllBtn.innerHTML = '<i class="fas fa-square mr-1"></i> 取消全选';
+            } else {
+                selectAllBtn.innerHTML = '<i class="fas fa-check-square mr-1"></i> 全选';
+            }
+        }
+
+        // 关闭登录模态框
+        function closeLoginModal() {
+            document.getElementById('login-modal').classList.add('hidden');
+            document.getElementById('login-form').reset();
+        }
+
+        // 关闭项目模态框
+        function closeProjectModal() {
+            document.getElementById('project-modal').classList.add('hidden');
+            document.getElementById('project-form').reset();
+        }
+
+        // 生成截断的项目内容HTML
+        function getTruncatedContent(content) {
+            if (content.length <= CONTENT_TRUNCATE_LENGTH) {
+                return `<div class="content-text">${content}</div>`;
+            }
+            const truncContent = content.substring(0, CONTENT_TRUNCATE_LENGTH);
+            return `
+                <div class="content-wrapper" data-full="${content}" data-trunc="${truncContent}">
+                    <span class="content-text">${truncContent}...</span>
+                    <span class="content-expand-btn"><i class="fas fa-chevron-down mr-1"></i>展开</span>
+                </div>
+            `;
+        }
+
+        // 渲染项目列表（包含筛选逻辑）
+        function renderProjects() {
+            const list = document.getElementById('project-list');
+            // 获取筛选条件
+            const city = document.getElementById('city-filter').value;
+            const system = document.getElementById('system-filter').value;
+            const date = document.getElementById('date-filter').value;
+
+            // 筛选项目
+            let filtered = [...projects];
+            if (city !== 'all') filtered = filtered.filter(p => p.city === city);
+            if (system !== 'all') filtered = filtered.filter(p => p.system === system);
+            if (date) filtered = filtered.filter(p => p.date === date);
+
+            // 按城市分组
+            const grouped = {};
+            filtered.forEach(p => {
+                if (!grouped[p.city]) grouped[p.city] = [];
+                grouped[p.city].push(p);
+            });
+
+            // 清空列表
+            list.innerHTML = '';
+
+            // 无数据时显示提示
+            if (Object.keys(grouped).length === 0) {
+                list.innerHTML = `
+                    <div class="text-center secondary py-10">
+                        <i class="fas fa-folder-open text-2xl mb-2"></i>
+                        <p>${isAdmin ? '暂无项目数据，可点击"添加新临床项目"创建' : '请登录管理员账号管理项目'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // 渲染分组项目
+            for (const city in grouped) {
+                const citySection = document.createElement('div');
+                citySection.className = 'mb-6';
+                citySection.innerHTML = `
+                    <div class="bg-primary-light px-4 py-2 rounded-t-lg flex items-center">
+                        <i class="fas fa-map-marker-alt primary mr-2"></i>
+                        <h2 class="text-lg font-medium primary">${city}</h2>
+                        <span class="ml-2 text-sm secondary">(${grouped[city].length}个项目)</span>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3 p-2 border border-primary/10 rounded-b-lg">
+                        ${grouped[city].map(p => `
+                            <div class="bg-white rounded-lg p-4 card-shadow hover:shadow-md transition">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex items-start gap-2">
+                                        ${isAdmin ? `
+                                            <input type="checkbox" class="project-checkbox checkbox-item mt-1" data-id="${p.id}" 
+                                                ${selectedProjectIds.has(p.id) ? 'checked' : ''}>
+                                        ` : ''}
+                                        <h3 class="font-medium content-collapse">
+                                            ${getTruncatedContent(p.content)}
+                                        </h3>
+                                    </div>
+                                    ${isAdmin ? `
+                                        <div class="flex gap-2">
+                                            <button class="edit-project text-primary text-sm" data-id="${p.id}">
+                                                <i class="fas fa-edit mr-1"></i>编辑
+                                            </button>
+                                            <button class="delete-project text-danger text-sm" data-id="${p.id}">
+                                                <i class="fas fa-trash mr-1"></i>删除
+                                            </button>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-sm secondary">
+                                    <div><span class="font-medium text-gray-700">补助金额：</span>¥${p.amount.toLocaleString()}</div>
+                                    <div><span class="font-medium text-gray-700">所属系统：</span>${p.system}</div>
+                                    <div><span class="font-medium text-gray-700">住院天数：</span>${p.days}天</div>
+                                    <div><span class="font-medium text-gray-700">体检时间：</span>${formatDate(p.date)}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                list.appendChild(citySection);
+            }
+
+            // 更新全选按钮状态
+            if (isAdmin) {
+                updateSelectAllButtonState();
+            }
+        }
+
+        // 日期格式化
+        function formatDate(dateStr) {
+            const d = new Date(dateStr);
+            return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+        }
+    </script>
+</body>
+</html>
